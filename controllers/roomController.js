@@ -1,5 +1,11 @@
 const Room = require("../models/Room");
 
+// We'll inject io from server.js into the controller
+let io;
+exports.injectSocket = (socketIo) => {
+  io = socketIo;
+};
+
 // GET: Fetch all rooms
 exports.getAllRooms = async (req, res) => {
   try {
@@ -19,6 +25,10 @@ exports.createRoom = async (req, res) => {
       players: [host]
     });
     await newRoom.save();
+
+    // 🔥 Notify all connected clients
+    if (io) io.emit("roomCreated", newRoom);
+
     res.status(201).json({ message: "Room created", room: newRoom });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -37,6 +47,9 @@ exports.joinRoom = async (req, res) => {
     if (!room.players.includes(username)) {
       room.players.push(username);
       await room.save();
+
+      // 🔥 Notify all connected clients
+      if (io) io.emit("roomUpdated", room);
     }
 
     res.status(200).json({ message: "Joined room", room });
