@@ -24,21 +24,17 @@ exports.createRoom = async (req, res) => {
   try {
     const { title, difficulty, maxParticipants, timer, platforms, host } = req.body;
 
-    if (!title || !host || !maxParticipants) {
-      return res.status(400).json({ success: false, error: "Missing required fields" });
-    }
-
     const newRoom = await Room.create({
-      title,
-      difficulty: difficulty || "Easy",
+      name: title,                  // <-- map title to name
+      difficulty,
       maxParticipants,
-      timer: timer || 300,
-      platforms: platforms || [],
-      host,
-      participants: 1,
+      timer,
+      platforms,
+      players: [host],              // <-- host as first player
       status: "waiting",
     });
 
+    // Emit to all connected clients
     if (ioInstance) ioInstance.emit("roomCreated", newRoom);
 
     res.status(201).json({ success: true, room: newRoom });
@@ -47,6 +43,7 @@ exports.createRoom = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
 
 
 // ✅ Join room + emit update
