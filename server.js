@@ -8,45 +8,47 @@ require("dotenv").config();
 const authRoutes = require("./routes/auth");
 const roomRoutes = require("./routes/room");
 const roomSocket = require("./socket/roomSocket");
-const roomController = require("./controllers/roomController"); // ⬅ Added import
+const roomController = require("./controllers/roomController"); // ✅ Import roomController
 
 const app = express();
-const server = http.createServer(app); // Create HTTP server for socket.io
+const server = http.createServer(app);
+
+// ✅ Socket.IO setup
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://code-arena-three.vercel.app",
-      "https://code-battle-backend-vq5s.onrender.com"
+      "https://code-arena-three.vercel.app", // frontend
+      "https://code-battle-backend-vq5s.onrender.com" // backend
     ],
     methods: ["GET", "POST"],
     credentials: true
   }
 });
 
-// Pass io to roomController so it can emit events
+// ✅ Make io available everywhere
+app.set("io", io);
+
+// ✅ Inject Socket.IO into roomController so it can emit events
 roomController.injectSocket(io);
 
-// Request logger
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
-
+// Middlewares
 app.use(express.json());
-app.use(cors({
-  origin: [
-    "https://code-arena-three.vercel.app",
-    "https://<your-render-backend-url>.onrender.com"
-  ],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: [
+      "https://code-arena-three.vercel.app",
+      "https://code-battle-backend-vq5s.onrender.com"
+    ],
+    credentials: true
+  })
+);
 
-// MongoDB Connection
+// MongoDB connection
 const MONGO_URI =
   process.env.MONGO_URI ||
-  "mongodb+srv://lpklpk:lpklpk@cluster0.zywog3z.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-
-mongoose.connect(MONGO_URI)
+  "mongodb+srv://lpklpk:lpklpk@cluster0.zywog3z.mongodb.net/?retryWrites=true&w=majority";
+mongoose
+  .connect(MONGO_URI)
   .then(() => console.log("✅ Connected to MongoDB Atlas"))
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);
@@ -62,19 +64,10 @@ app.get("/", (req, res) => {
   res.json({ message: "Backend running successfully" });
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error("🔥 Server Error:", err);
-  res.status(500).json({
-    error: "Internal Server Error",
-    details: err.message,
-  });
-});
-
-// Initialize sockets
+// Socket connections
 io.on("connection", (socket) => {
   console.log(`🔌 User connected: ${socket.id}`);
-  roomSocket(io, socket); // Pass io + socket to roomSocket.js
+  roomSocket(io, socket);
 
   socket.on("disconnect", () => {
     console.log(`❌ User disconnected: ${socket.id}`);

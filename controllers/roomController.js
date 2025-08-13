@@ -1,59 +1,77 @@
+// controllers/roomController.js
 const Room = require("../models/Room");
 
-// We'll inject io from server.js into the controller
-let io;
-exports.injectSocket = (socketIo) => {
-  io = socketIo;
+let ioInstance; // store Socket.IO instance here
+
+// 🔌 Inject Socket.IO instance from server.js
+exports.injectSocket = (io) => {
+  ioInstance = io;
 };
 
-// GET: Fetch all rooms
+// ✅ Get all rooms
 exports.getAllRooms = async (req, res) => {
   try {
     const rooms = await Room.find();
-    res.json(rooms);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(200).json(rooms);
+  } catch (err) {
+    console.error("❌ Failed to fetch rooms:", err);
+    res.status(500).json({ error: "Failed to fetch rooms" });
   }
 };
 
-// POST: Create a new room
+// ✅ Create room + emit event
 exports.createRoom = async (req, res) => {
-  const { name, host } = req.body;
   try {
-    const newRoom = new Room({
-      name,
-      players: [host]
+    const { title, difficulty, maxParticipants, timer, platforms, host } = req.body;
+
+    const newRoom = await Room.create({
+      title,
+      difficulty,
+      maxParticipants,
+      timer,
+      platforms,
+      host,
+      participants: 1, // host counts as 1 participant
+      status: "waiting",
     });
-    await newRoom.save();
 
-    // 🔥 Notify all connected clients
-    if (io) io.emit("roomCreated", newRoom);
+    // Emit to all connected clients
+    if (ioInstance) {
+      ioInstance.emit("roomCreated", newRoom);
+    }
 
-    res.status(201).json({ message: "Room created", room: newRoom });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(201).json({ success: true, room: newRoom });
+  } catch (err) {
+    console.error("❌ Error creating room:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-// POST: Join an existing room
+// ✅ Join room + emit update
 exports.joinRoom = async (req, res) => {
-  const { roomId, username } = req.body;
   try {
+    const { roomId } = req.body;
     const room = await Room.findById(roomId);
+
     if (!room) {
-      return res.status(404).json({ message: "Room not found" });
+      return res.status(404).json({ error: "Room not found" });
     }
 
-    if (!room.players.includes(username)) {
-      room.players.push(username);
-      await room.save();
-
-      // 🔥 Notify all connected clients
-      if (io) io.emit("roomUpdated", room);
+    if (room.participants >= room.maxParticipants) {
+      return res.status(400).json({ error: "Room is full" });
     }
 
-    res.status(200).json({ message: "Joined room", room });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    room.participants += 1;
+    await room.save();
+
+    // Emit updated room to all clients
+    if (ioInstance) {
+      ioInstance.emit("roomUpdated", room);
+    }
+
+    res.json({ success: true, room });
+  } catch (err) {
+    console.error("❌ Error joining room:", err);
+    res.status(500).json({ error: err.message });
   }
 };
